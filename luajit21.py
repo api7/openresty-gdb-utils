@@ -2567,10 +2567,7 @@ Usage: lgcstat"""
         # step 3: Figure out the size of misc data structures
         strhash_size = (strmask(g) + 1) * typ("GCRef").sizeof
 
-        if is_gc64():
-            g_tmpbuf_sz = g['tmpbuf']['e']['ptr64'] - g['tmpbuf']['b']['ptr64']
-        else:
-            g_tmpbuf_sz = g['tmpbuf']['e']['ptr32'] - g['tmpbuf']['b']['ptr32']
+        g_tmpbuf_sz = int(g['tmpbuf']['e']) - int(g['tmpbuf']['b'])
 
         jit_state_sz = self.get_jit_state_sz(G2J(g))
         ctype_state_sz = 0
