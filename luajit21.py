@@ -2544,25 +2544,44 @@ Usage: lgcstat"""
         # step 1: Go through all non-string objects
         o = gcref(g['gc']['root'])
         while o:
-            ty = int(o['gch']['gct'])
-            ocnt[ty] = ocnt[ty] + 1
-            sz = self.get_obj_sz(g, o)
-            ototal_sz[ty] += sz;
-            omax[ty] = max(omax[ty], sz);
-            omin[ty] = min(omin[ty], sz);
-            o = gcref(o['gch']['nextgc'])
+            try:
+                ty = int(o['gch']['gct'])
+                ocnt[ty] += 1
+                sz = self.get_obj_sz(g, o)
+                ototal_sz[ty] += sz
+                omax[ty] = max(omax[ty], sz)
+                omin[ty] = min(omin[ty], sz)
+            except gdb.MemoryError as e:
+                out(f"Invalid GC object at 0x{int(o):x}: {e}\n")
+            # Safely get next object
+            try:
+                next_o = gcref(o['gch']['nextgc'])
+            except gdb.MemoryError:
+                next_o = None
+            o = next_o
 
         # step 2: Go through strings
+        ty_str = int(~LJ_TSTR())
         for i in range(0, int(1 + strmask(g))):
-            o = gcref(strhash(g)[i])
-            ty = int(~LJ_TSTR());
+            try:
+                o = gcref(strhash(g)[i])
+            except gdb.MemoryError:
+                continue
             while o:
-                ocnt[ty] = ocnt[ty] + 1
-                sz = self.get_obj_sz(g, o)
-                ototal_sz[ty] += sz;
-                omax[ty] = max(omax[ty], sz);
-                omin[ty] = min(omin[ty], sz);
-                o = gcref(o['gch']['nextgc'])
+                try:
+                    ocnt[ty_str] += 1
+                    sz = self.get_obj_sz(g, o)
+                    ototal_sz[ty_str] += sz
+                    omax[ty_str] = max(omax[ty_str], sz)
+                    omin[ty_str] = min(omin[ty_str], sz)
+                except gdb.MemoryError as e:
+                    out(f"Invalid string object at 0x{int(o):x}: {e}\n")
+                # Safely get next string
+                try:
+                    next_o = gcref(o['gch']['nextgc'])
+                except gdb.MemoryError:
+                    next_o = None
+                o = next_o
 
         # step 3: Figure out the size of misc data structures
         strhash_size = (strmask(g) + 1) * typ("GCRef").sizeof
@@ -2644,7 +2663,10 @@ Usage: lgcstat"""
         return sz
 
     def get_obj_sz(self, g, o) :
-        ty = o['gch']['gct']
+        try:
+            ty = int(o['gch']['gct'])
+        except gdb.MemoryError:
+            return 0
         if ty == ~LJ_TSTR():
             return self.GCstr_sizeof + o['str']['len'] + 1
 
